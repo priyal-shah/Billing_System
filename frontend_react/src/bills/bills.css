@@ -1,0 +1,76 @@
+/* Bill styles are plain CSS (not MUI) so print output is predictable. */
+.bill {
+  color: #111;
+  background: #fff;
+  font-family: Inter, Arial, sans-serif;
+}
+.bill .muted { color: #555; }
+.bill .pre { white-space: pre-line; }
+.bill .center { text-align: center; }
+.bill table { border-collapse: collapse; }
+
+/* ---------- Format A: A4 ---------- */
+.bill-a {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 14mm;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+.bill-a h1 { margin: 0 0 4px; font-size: 22px; }
+.bill-a h2 { margin: 0 0 8px; font-size: 18px; text-transform: uppercase; letter-spacing: 1px; text-align: right; }
+.bill-a__header {
+  display: flex; justify-content: space-between; gap: 24px;
+  border-bottom: 2px solid #2e7d32; padding-bottom: 12px; margin-bottom: 16px; line-height: 1.5;
+}
+.bill .kv td { padding: 2px 0 2px 12px; }
+.bill .kv td:first-child { color: #555; padding-left: 0; }
+.bill .kv td:last-child { text-align: right; }
+.bill-a__items { width: 100%; }
+.bill-a__items th, .bill-a__items td { border: 1px solid #ccc; padding: 6px 8px; text-align: right; }
+.bill-a__items th { background: #eef5ee; font-weight: 600; }
+.bill-a__items .left { text-align: left; }
+.bill-a__items td:first-child, .bill-a__items th:first-child { text-align: center; width: 28px; }
+.bill-a__summary { display: flex; justify-content: space-between; gap: 24px; margin-top: 16px; align-items: flex-start; }
+.bill-a__left { flex: 1; }
+.bill-a__tax th, .bill-a__tax td { border: 1px solid #ccc; padding: 4px 8px; text-align: right; font-size: 11px; }
+.bill-a__tax th { background: #f5f5f5; }
+.bill-a .words { margin-top: 12px; }
+.bill-a__totals { min-width: 240px; }
+.bill-a__totals td { padding: 4px 0 4px 16px; }
+.bill-a__totals .grand td { border-top: 2px solid #111; font-size: 16px; font-weight: 700; padding-top: 8px; }
+.bill-a__footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 40px; gap: 24px; }
+.bill-a .sign { text-align: right; }
+
+/* ---------- Format B: 80mm thermal ---------- */
+.bill-b {
+  width: 72mm;
+  padding: 3mm;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.bill-b__name { font-size: 16px; font-weight: 700; }
+.bill-b__title { margin-top: 4px; font-weight: 700; text-transform: uppercase; }
+.bill-b .row { display: flex; justify-content: space-between; gap: 8px; }
+.bill-b .row span:last-child { text-align: right; white-space: nowrap; }
+.bill-b .head { font-weight: 700; }
+.bill-b .rule { border-top: 1px dashed #111; margin: 4px 0; }
+.bill-b .rule.double { border-top: 3px double #111; }
+.bill-b .grand { font-size: 15px; font-weight: 700; }
+.bill-b__item { margin-bottom: 3px; }
+.bill-b .footer { margin-top: 6px; }
+
+/* ---------- screen preview ---------- */
+.bill-preview {
+  display: flex; justify-content: center; padding: 24px; background: #e9ecea; min-height: calc(100vh - 64px);
+}
+.bill-preview .bill { box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15); }
+
+@media print {
+  .bill-preview { padding: 0; background: none; min-height: 0; display: block; }
+  .bill-preview .bill { box-shadow: none; }
+  .bill-a { width: auto; min-height: 0; padding: 0; }
+  .bill-b { width: auto; padding: 0; }
+  .bill-a__items tr { page-break-inside: avoid; }
+}

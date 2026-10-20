@@ -1,0 +1,40 @@
+# Production stack for one EC2 server. Run from this folder:  docker compose up -d --build
+# Settings come from deploy/.env (copy .env.example). MongoDB is hosted on MongoDB Atlas.
+services:
+  backend:
+    build:
+      context: ../backend_fastapi
+    env_file: .env
+    environment:
+      APP_ENV: production
+    restart: unless-stopped
+    expose:
+      - "8000"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?Set SITE_ADDRESS in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data      # HTTPS certificates; keep this volume
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+volumes:
+  caddy_data:
+  caddy_config:

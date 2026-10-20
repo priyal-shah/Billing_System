@@ -1,0 +1,9 @@
+# Build context for deploy/web.Dockerfile is the project root; only frontend_react/ and deploy/ are needed.
+**/node_modules
+**/.venv
+**/__pycache__
+**/dist
+**/.env
+backend/
+frontend/
+backend_fastapi/

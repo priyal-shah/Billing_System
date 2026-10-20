@@ -1,0 +1,36 @@
+# SITE_ADDRESS is the public hostname, e.g. 13-233-10-5.sslip.io or billing.myshop.com.
+# Caddy obtains and renews the HTTPS certificate automatically and redirects http -> https.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		root * /srv
+		# Single-page app: unknown paths (e.g. /admin/orders) load index.html
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Vite puts content hashes in asset filenames, so they can be cached forever.
+	@hashed path /assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	# Everything else (index.html for every app route) must be revalidated so updates show up.
+	@unhashed not path /assets/*
+	header @unhashed Cache-Control "no-cache"
+
+	log {
+		output stdout
+		format console
+	}
+}
