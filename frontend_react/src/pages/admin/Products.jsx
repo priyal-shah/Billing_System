@@ -8,6 +8,7 @@ import {
 } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
 import api, { errorMessage } from '../../api/client';
+import { PRODUCTS_CHANGED } from '../../components/ai/ApprovalCards';
 import { PageHeader } from '../../components/common';
 import { useNotify } from '../../context/NotifyContext';
 import { useSettings } from '../../context/SettingsContext';
@@ -134,6 +135,12 @@ export default function Products() {
   useEffect(() => {
     const t = setTimeout(reload, 250);
     return () => clearTimeout(t);
+  }, [reload]);
+
+  // Changes approved in the AI assistant panel.
+  useEffect(() => {
+    window.addEventListener(PRODUCTS_CHANGED, reload);
+    return () => window.removeEventListener(PRODUCTS_CHANGED, reload);
   }, [reload]);
 
   const setFilter = (k) => (e) => { setFilters({ ...filters, [k]: e.target.value }); setPage(0); };

@@ -1,7 +1,8 @@
+import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PrintIcon from '@mui/icons-material/Print';
 import { Alert, AppBar, Box, Button, CircularProgress, MenuItem, TextField, Toolbar, Typography } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link as RouterLink, useParams, useSearchParams } from 'react-router-dom';
 import api, { errorMessage } from '../../api/client';
 import '../../bills/bills.css';
@@ -13,6 +14,7 @@ export default function PrintBill() {
   const [bill, setBill] = useState(null);
   const [error, setError] = useState('');
   const requested = params.get('format') || undefined;
+  const fromNewOrder = params.get('from') === 'new';
 
   useEffect(() => {
     setBill(null);
@@ -34,6 +36,17 @@ export default function PrintBill() {
 
   const Bill = format?.component;
 
+  // Coming from "Place order & print": open the print dialog once the bill has rendered.
+  const autoPrinted = useRef(false);
+  useEffect(() => {
+    if (!Bill || autoPrinted.current || params.get('autoprint') !== '1') return;
+    autoPrinted.current = true;
+    const next = new URLSearchParams(params);
+    next.delete('autoprint');
+    setParams(next, { replace: true });
+    setTimeout(() => window.print(), 300);
+  }, [Bill, params, setParams]);
+
   return (
     <>
       <AppBar position="sticky" color="default" className="no-print" elevation={1}>
@@ -42,9 +55,12 @@ export default function PrintBill() {
           <Typography sx={{ flexGrow: 1, fontFamily: 'monospace', fontWeight: 700 }}>{orderId}</Typography>
           <TextField select size="small" label="Bill format" sx={{ minWidth: 240 }}
             value={bill?.format.id || requested || ''}
-            onChange={(e) => setParams({ format: e.target.value }, { replace: true })}>
+            onChange={(e) => setParams({ format: e.target.value, ...(fromNewOrder ? { from: 'new' } : {}) }, { replace: true })}>
             {Object.values(BILL_FORMATS).map((f) => <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>)}
           </TextField>
+          {fromNewOrder && (
+            <Button component={RouterLink} to="/admin/orders/new" startIcon={<AddIcon />}>New order</Button>
+          )}
           <Button variant="contained" startIcon={<PrintIcon />} disabled={!Bill} onClick={() => window.print()}>
             Print / Save PDF
           </Button>

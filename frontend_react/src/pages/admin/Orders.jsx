@@ -77,7 +77,10 @@ export default function Orders() {
   return (
     <>
       <PageHeader title="Orders" subtitle={`${data.total} order${data.total === 1 ? '' : 's'}`}
-        actions={<Button onClick={() => setParams({}, { replace: true })}>Clear filters</Button>} />
+        actions={<>
+          <Button onClick={() => setParams({}, { replace: true })}>Clear filters</Button>
+          <Button variant="contained" onClick={() => navigate('/admin/orders/new')}>New order</Button>
+        </>} />
       <Paper sx={{ p: 2, mb: 2 }}>
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>{field('order_id', 'Order ID')}</Grid>

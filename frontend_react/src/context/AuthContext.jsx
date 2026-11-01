@@ -1,100 +1,136 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import api, { setAuthToken, setUnauthorizedHandler } from '../api/client';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import api, { setAccountActionHandler, setGuestToken, setUnauthorizedHandler } from '../api/client';
 
 const AuthContext = createContext(null);
 
-// Registered logins are shared by all tabs (localStorage). Guest sessions belong to one tab only
-// (sessionStorage), so a guest ordering in one tab never picks up an admin login from another.
-const USER_KEY = 'token';
+// Signed-in users: the session is in httpOnly cookies shared by all tabs; this code only knows who
+// the user is (from /auth/me). Guests: a bearer token kept in this tab's sessionStorage, so a guest
+// ordering in one tab never picks up an admin login from another.
 const GUEST_KEY = 'guestToken';
+const CHANNEL = 'grocery-billing-auth';
 
-function read(storage, key) {
+// Earlier versions kept the login token in localStorage; remove it so it can't be read or reused.
+try { localStorage.removeItem('token'); } catch { /* storage unavailable */ }
+
+function readGuest() {
   try {
-    return storage.getItem(key);
+    return sessionStorage.getItem(GUEST_KEY);
   } catch {
     return null;
   }
 }
-function write(storage, key, value) {
+function writeGuest(value) {
   try {
-    if (value) storage.setItem(key, value);
-    else storage.removeItem(key);
+    if (value) sessionStorage.setItem(GUEST_KEY, value);
+    else sessionStorage.removeItem(GUEST_KEY);
   } catch {
-    /* storage unavailable: session lasts until reload */
+    /* storage unavailable: guest session lasts until reload */
   }
 }
 
-function initialSession() {
-  const guestToken = read(sessionStorage, GUEST_KEY);
-  if (guestToken) return { token: guestToken, guest: true, user: null };
-  return { token: read(localStorage, USER_KEY), guest: false, user: null };
-}
-
 export function AuthProvider({ children }) {
-  // This tab's session. API calls always use this token, never whatever storage holds now.
-  const [session, setSession] = useState(initialSession);
-  setAuthToken(session.token);
-  const { token, user } = session;
+  const [state, setState] = useState(() => {
+    const guest = readGuest();
+    setGuestToken(guest);
+    return { user: null, loading: true, guest: !!guest };
+  });
+  const channel = useRef(null);
 
-  const logout = useCallback(() => {
-    setSession((s) => {
-      if (s.guest) write(sessionStorage, GUEST_KEY, null);
-      else write(localStorage, USER_KEY, null);
-      return { token: null, guest: false, user: null };
-    });
-  }, []);
-
-  useEffect(() => setUnauthorizedHandler(logout), [logout]);
-
-  // Resolve who the token belongs to (on load, or after another tab changed the login).
-  useEffect(() => {
-    if (!token || user) return;
-    let active = true;
-    api.get('/auth/me')
-      .then((r) => active && setSession((s) => (s.token === token ? { ...s, user: r.data } : s)))
-      .catch(() => active && logout());
-    return () => { active = false; };
-  }, [token, user, logout]);
-
-  // Keep registered-user tabs in sync when someone logs in or out in another tab.
-  useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key !== USER_KEY) return;
-      setSession((s) => (s.guest || s.token === e.newValue ? s : { token: e.newValue, guest: false, user: null }));
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
-  const saveSession = (data) => {
-    const guest = data.user.role === 'guest';
-    if (guest) {
-      write(sessionStorage, GUEST_KEY, data.access_token);
-    } else {
-      write(localStorage, USER_KEY, data.access_token);
-      write(sessionStorage, GUEST_KEY, null);
+  const loadMe = useCallback(async () => {
+    try {
+      const r = await api.get('/auth/me');
+      setState((s) => ({ ...s, user: r.data, loading: false }));
+      return r.data;
+    } catch {
+      setState((s) => ({ ...s, user: null, loading: false }));
+      return null;
     }
-    setAuthToken(data.access_token);
-    setSession({ token: data.access_token, guest, user: data.user });
+  }, []);
+
+  const clearLocal = useCallback(() => {
+    writeGuest(null);
+    setGuestToken(null);
+    setState({ user: null, loading: false, guest: false });
+  }, []);
+
+  // Tell other tabs of this browser that the signed-in user changed, so they reload it.
+  const announce = () => channel.current?.postMessage('changed');
+
+  useEffect(() => { loadMe(); }, [loadMe]);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return undefined;
+    channel.current = new BroadcastChannel(CHANNEL);
+    channel.current.onmessage = () => {
+      if (!readGuest()) loadMe(); // guest tabs keep their own session
+    };
+    return () => channel.current?.close();
+  }, [loadMe]);
+
+  useEffect(() => {
+    setUnauthorizedHandler(clearLocal);
+    setAccountActionHandler(() => loadMe()); // server says: change password / set up 2FA first
+  }, [clearLocal, loadMe]);
+
+  const signedIn = (user) => {
+    writeGuest(null);
+    setGuestToken(null);
+    setState({ user, loading: false, guest: false });
+    announce();
+    return user;
+  };
+
+  /** Returns { mfaRequired: true } when a 2FA code is needed next, otherwise { user }. */
+  const login = async (username, password) => {
+    const { data } = await api.post('/auth/login', { username, password });
+    if (data.mfa_required) return { mfaRequired: true };
+    return { user: signedIn(data.user) };
+  };
+
+  const verifyMfa = async (code) => {
+    const { data } = await api.post('/auth/login/2fa', { code });
+    return signedIn(data.user);
+  };
+
+  const register = async (body) => signedIn((await api.post('/auth/register', body)).data.user);
+
+  const startGuest = async (name) => {
+    const { data } = await api.post('/auth/guest', { name });
+    writeGuest(data.access_token);
+    setGuestToken(data.access_token);
+    setState({ user: data.user, loading: false, guest: true });
     return data.user;
   };
 
-  const login = async (username, password) =>
-    saveSession((await api.post('/auth/login', { username, password })).data);
+  const logout = useCallback(async () => {
+    const wasGuest = !!readGuest();
+    clearLocal();
+    if (!wasGuest) {
+      await api.post('/auth/logout').catch(() => {});
+      channel.current?.postMessage('changed');
+    }
+  }, [clearLocal]);
 
-  const register = async (body) => saveSession((await api.post('/auth/register', body)).data);
-
-  const startGuest = async (name) => saveSession((await api.post('/auth/guest', { name })).data);
+  /** After "log out of all devices" or a password change elsewhere. */
+  const logoutEverywhere = async () => {
+    await api.post('/auth/logout-all');
+    clearLocal();
+    announce();
+  };
 
   const value = useMemo(
     () => ({
-      user,
-      loading: !!token && !user,
-      login, register, startGuest, logout,
-      isAdmin: user?.role === 'admin', isGuest: user?.role === 'guest',
+      user: state.user,
+      loading: state.loading,
+      login, verifyMfa, register, startGuest, logout, logoutEverywhere,
+      setUser: (user) => { setState((s) => ({ ...s, user })); announce(); },
+      reloadUser: loadMe,
+      isAdmin: state.user?.role === 'admin',
+      isGuest: state.user?.role === 'guest',
+      needsSetup: !!(state.user?.must_change_password || state.user?.mfa_setup_required),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, token, logout],
+    [state, logout, loadMe],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

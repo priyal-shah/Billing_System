@@ -2,13 +2,12 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from ..db import get_db, next_sequence, utcnow
+from ..db import get_db, utcnow
 from ..schemas import Page, ProductIn, ProductOut
 from ..security import get_current_user, require_admin
+from ..services.products import ACTIVE, insert_product, replace_product
 
 router = APIRouter(tags=["products"])
-
-ACTIVE = {"is_deleted": {"$ne": True}}
 
 
 def contains(text: str) -> dict:
@@ -57,26 +56,12 @@ async def get_product(product_id: str, _user=Depends(get_current_user), db=Depen
 
 @router.post("/products", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
 async def create_product(body: ProductIn, _admin=Depends(require_admin), db=Depends(get_db)):
-    now = utcnow()
-    seq = await next_sequence(db, "product")
-    doc = {
-        "product_id": f"PRD-{seq:05d}",
-        **body.model_dump(mode="python"),
-        "unit": body.unit.value,
-        "is_deleted": False,
-        "created_at": now,
-        "updated_at": now,
-    }
-    await db.products.insert_one(doc)
-    return doc
+    return await insert_product(db, body)
 
 
 @router.put("/products/{product_id}", response_model=ProductOut)
 async def update_product(product_id: str, body: ProductIn, _admin=Depends(require_admin), db=Depends(get_db)):
-    changes = {**body.model_dump(mode="python"), "unit": body.unit.value, "updated_at": utcnow()}
-    product = await db.products.find_one_and_update(
-        {"product_id": product_id, **ACTIVE}, {"$set": changes}, return_document=True
-    )
+    product = await replace_product(db, product_id, body)
     if not product:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
     return product

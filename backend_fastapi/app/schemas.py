@@ -88,12 +88,50 @@ class UserOut(BaseModel):
     role: Role
     full_name: str | None = None
     created_at: datetime
+    mfa_enabled: bool = False
+    # Steps the account must finish before it can use the app.
+    must_change_password: bool = False
+    mfa_setup_required: bool = False
 
 
 class TokenOut(BaseModel):
+    """Guest sessions only: the token is held by one browser tab."""
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+
+
+class SessionOut(BaseModel):
+    """Signed-in sessions live in httpOnly cookies; the body only describes the user."""
+    user: UserOut
+
+
+class LoginOut(BaseModel):
+    mfa_required: bool = False  # password accepted; POST /auth/login/2fa with the code next
+    user: UserOut | None = None
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=10, max_length=72)
+
+
+class CodeIn(BaseModel):
+    code: str = Field(min_length=6, max_length=20)
+
+
+class DisableMfaIn(BaseModel):
+    password: str
+    code: str = Field(min_length=6, max_length=20)
+
+
+class MfaSetupOut(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+class RecoveryCodesOut(BaseModel):
+    recovery_codes: list[str]
 
 
 # ---------- products ----------
@@ -135,6 +173,27 @@ class CartItemIn(BaseModel):
 
 class OrderCreate(BaseModel):
     items: list[CartItemIn] = Field(min_length=1, max_length=200)
+
+
+class AdminOrderCreate(BaseModel):
+    """Order placed by an admin on a customer's behalf (counter sale or phone order)."""
+    customer_name: str = Field(min_length=2, max_length=60)
+    # Set when the admin picked a registered customer; the order then shows in that customer's history.
+    customer_username: str | None = None
+    items: list[CartItemIn] = Field(min_length=1, max_length=200)
+
+    @field_validator("customer_name")
+    @classmethod
+    def clean_name(cls, v: str) -> str:
+        v = " ".join(v.split())
+        if len(v) < 2:
+            raise ValueError("Enter the customer's name")
+        return v
+
+
+class CustomerOut(BaseModel):
+    username: str
+    full_name: str | None = None
 
 
 class OrderItemEdit(BaseModel):
@@ -199,6 +258,7 @@ class OrderOut(BaseModel):
     order_id: str
     username: str
     is_guest: bool = False
+    placed_by: str | None = None  # admin who placed it on the customer's behalf
     items: list[OrderItemOut]
     item_count: int
     subtotal: Num

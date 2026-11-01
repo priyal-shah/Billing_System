@@ -17,6 +17,7 @@ The database is **MongoDB Atlas**, also on AWS in Mumbai. The site address is a 
 | Public IPv4 address | ~$3.6 |
 | Atlas M0 | free |
 | **Total** | **≈ $22/month** |
+| AI assistant (optional) | pay per use on your Anthropic account; set a monthly limit there |
 
 Set a budget alert (step B5) so there are no surprises.
 
@@ -36,7 +37,8 @@ Set a budget alert (step B5) so there are no surprises.
 3. **Database Access → Add New Database User:**
    - Username: `billing_app`
    - Password: autogenerate one and copy it somewhere safe
-   - Role: *Read and write to any database*
+   - Role: **Specific Privileges → `readWrite` on database `grocery_billing`** (not *any database*, so a
+     leaked password can't touch anything else)
 4. **Network Access:** leave this for now; you'll add the server's IP in step B4. Don't allow `0.0.0.0/0`.
 5. **Connect → Drivers:** copy the connection string. It looks like
    `mongodb+srv://billing_app:<db_password>@billing-cluster.xxxxx.mongodb.net/?retryWrites=true&w=majority&appName=billing-cluster`
@@ -44,9 +46,11 @@ Set a budget alert (step B5) so there are no surprises.
 **Backups:** the free M0 tier has **no automatic backups**. Before the shop relies on it, either upgrade the
 cluster to **Flex** (daily snapshots, from about $8/month) or run the manual backup in section J regularly.
 
+**Protect the Atlas account itself:** turn on two-factor sign-in under your Atlas profile → *Security*.
+
 ## B. AWS server (EC2)
 
-1. Sign in to the AWS Console and choose the **Asia Pacific (Mumbai)** region at the top right.
+1. Sign in to the AWS Console (turn on MFA for the root user and your IAM user first: *IAM → Security credentials*) and choose the **Asia Pacific (Mumbai)** region at the top right.
 2. **EC2 → Launch instance**, with these settings:
    - Name: `billing-server`
    - AMI: **Ubuntu Server 24.04 LTS** (64-bit x86)
@@ -94,8 +98,14 @@ Copy `deploy\.env.example` to `deploy\.env` and fill it in:
 | `CORS_ORIGINS` | `https://` + the same address |
 | `MONGO_URI` | the Atlas string from A5, with the real password in place of `<db_password>` |
 | `JWT_SECRET` | output of `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| `ANTHROPIC_API_KEY` | optional: your key from <https://console.anthropic.com> to turn on the AI assistant; leave empty to hide it |
+| `ACCESS_TOKEN_MINUTES`, `REFRESH_TOKEN_DAYS`, `REQUIRE_ADMIN_2FA`, `AI_MODEL`, `AI_TIMEZONE` | keep the defaults |
 
-The app refuses to start if `JWT_SECRET` is missing or weak, or if `MONGO_URI` still points at localhost.
+The app refuses to start if `JWT_SECRET` is missing or weak, if `MONGO_URI` still points at localhost, or if
+any admin account still has a published default password such as `admin123`.
+
+`deploy\.env` holds your secrets: it's already ignored by git, and the deploy script uploads it with
+owner-only permissions. Don't email or paste it anywhere.
 
 ## F. Deploy
 
@@ -111,13 +121,19 @@ certificate warning in the first minute, wait and reload while Caddy fetches the
 
 ## G. Create the admin account
 
-This asks for the password you want to use:
+This asks for the password you want to use (at least 10 characters):
 
 ```powershell
-ssh -t -i "$HOME\.ssh\billing-key.pem" ubuntu@13.233.10.5 "cd ~/billing/deploy && docker compose exec backend python -m scripts.create_admin admin"
+ssh -t -i "$HOME\.ssh\billing-key.pem" ubuntu@13.233.10.5 "cd ~/billing/deploy && docker compose run --rm backend python -m scripts.create_admin admin"
 ```
 
-Run it again any time to reset that admin's password.
+Then sign in at your site. The first time, the app asks you to **set up two-factor sign-in**: scan the QR code
+with Google Authenticator, Microsoft Authenticator or Authy, enter the 6-digit code, and **save the 10
+recovery codes** somewhere safe (not on the same phone). From then on, signing in takes your password plus a code.
+
+Run the same command any time to reset that admin's password. It is also the way back in if you lose your
+phone *and* your recovery codes: it signs the account out everywhere and turns its two-factor sign-in off,
+so you set it up again at the next sign-in. (`run --rm` works even if the backend is refusing to start.)
 
 ## H. Add your products
 
@@ -167,6 +183,11 @@ mkdir -p ~/backups && docker run --rm mongo:7 mongodump --uri "MONGO_URI" --db g
 `SITE_ADDRESS` and `CORS_ORIGINS` in `deploy\.env`, and run the deploy script again.
 
 **Security notes:**
+- Sign-in uses httpOnly cookies with CSRF protection, 15-minute access tokens and rotating refresh tokens.
+  Admins must use two-factor sign-in. See *Security* in `README_FASTAPI_REACT.md`.
+- Caddy sends a Content-Security-Policy and other security headers, and serves HTTPS only.
+- If someone with access leaves: change `JWT_SECRET` (signs everyone out), the Atlas user's password and the
+  Anthropic key, then redeploy.
 - Login, sign-up, guest sessions and order placing are rate-limited per IP address.
 - The API docs page (`/docs`) is turned off in production.
 - SSH is open only to your IP. If your home IP changes, update the security group's SSH rule in the EC2 console.

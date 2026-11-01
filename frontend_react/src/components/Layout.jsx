@@ -1,8 +1,10 @@
+import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
+import SecurityIcon from '@mui/icons-material/Security';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
@@ -17,17 +19,21 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useSettings } from '../context/SettingsContext';
+import AiAssistant from './ai/AiAssistant';
 
 const USER_LINKS = [
   { to: '/shop', label: 'Shop', icon: <StorefrontIcon /> },
   { to: '/my-orders', label: 'My Orders', icon: <ReceiptLongIcon />, registeredOnly: true },
+  { to: '/account/security', label: 'Security', icon: <SecurityIcon />, registeredOnly: true },
 ];
 const ADMIN_LINKS = [
   { to: '/admin', label: 'Dashboard', icon: <DashboardIcon />, end: true },
-  { to: '/admin/orders', label: 'Orders', icon: <ReceiptLongIcon /> },
+  { to: '/admin/orders/new', label: 'New order', icon: <AddShoppingCartIcon /> },
+  { to: '/admin/orders', label: 'Orders', icon: <ReceiptLongIcon />, end: true },
   { to: '/admin/products', label: 'Products', icon: <Inventory2Icon /> },
   { to: '/admin/guest-qr', label: 'Guest QR', icon: <QrCode2Icon /> },
   { to: '/admin/settings', label: 'Settings', icon: <SettingsIcon /> },
+  { to: '/account/security', label: 'Security', icon: <SecurityIcon /> },
 ];
 
 const activeLink = { opacity: 0.85, '&.active': { opacity: 1, bgcolor: 'rgba(255,255,255,0.15)' } };
@@ -150,6 +156,7 @@ export default function Layout() {
       <Container maxWidth="xl" sx={{ py: 3, px: { xs: 1.5, sm: 3 } }}>
         <Outlet />
       </Container>
+      {isAdmin && <AiAssistant />}
     </Box>
   );
 }

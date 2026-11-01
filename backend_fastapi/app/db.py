@@ -52,6 +52,19 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     await db.orders.create_index([("updated_at", DESCENDING)])
     await db.orders.create_index([("status", ASCENDING)])
 
+    # Sign-in sessions: refresh tokens are stored hashed and deleted by MongoDB once expired.
+    await db.refresh_tokens.create_index("token_hash", unique=True)
+    await db.refresh_tokens.create_index("family")
+    await db.refresh_tokens.create_index("username")
+    await db.refresh_tokens.create_index("expires_at", expireAfterSeconds=0)
+
+    # AI assistant
+    await db.ai_conversations.create_index("conversation_id", unique=True)
+    await db.ai_pending_actions.create_index("action_id", unique=True)
+    await db.ai_pending_actions.create_index("conversation_id")
+    await db.ai_images.create_index("image_id", unique=True)
+    await db.ai_audit_log.create_index([("at", DESCENDING)])
+
 
 async def next_sequence(db: AsyncDatabase, name: str) -> int:
     """Atomically increment and return a named counter (never reused)."""

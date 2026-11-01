@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from ..bill_formats import BILL_FORMATS
 from ..db import get_db
 from ..schemas import (
-    BillOut, OrderCreate, OrderItemEdit, OrderItemPatch, OrderOut, OrderStats, OrderUpdate, Page, ShopSettings,
+    AdminOrderCreate, BillOut, CustomerOut, OrderCreate, OrderItemEdit, OrderItemPatch, OrderOut, OrderStats, OrderUpdate, Page, ShopSettings,
     StatusUpdate,
 )
 from ..ratelimit import rate_limit
@@ -60,6 +60,27 @@ async def my_orders(
 
 
 # ---------- admin ----------
+
+@router.get("/customers", response_model=list[CustomerOut])
+async def search_customers(q: str = Query("", max_length=60), _admin=Depends(require_admin), db=Depends(get_db)):
+    """Registered customers matching a name, for picking who an admin-placed order belongs to."""
+    filt: dict = {"role": "user"}
+    if q.strip():
+        rx = {"$regex": re.escape(q.strip()), "$options": "i"}
+        filt["$or"] = [{"username": rx}, {"full_name": rx}]
+    cursor = db.users.find(filt, {"username": 1, "full_name": 1}).sort("username", 1).limit(10)
+    return [u async for u in cursor]
+
+
+@router.post("/orders/admin", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
+async def place_order_for_customer(body: AdminOrderCreate, admin=Depends(require_admin), db=Depends(get_db)):
+    if body.customer_username:
+        customer = await db.users.find_one({"username": body.customer_username, "role": "user"})
+        if not customer:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"No customer account '{body.customer_username}'")
+        return await svc.create_order(db, customer["username"], body.items, placed_by=admin["username"])
+    return await svc.create_order(db, body.customer_name, body.items, walk_in=True, placed_by=admin["username"])
+
 
 @router.get("/orders", response_model=Page[OrderOut])
 async def list_orders(

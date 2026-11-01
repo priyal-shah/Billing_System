@@ -121,7 +121,11 @@ async def generate_order_id(db: AsyncDatabase) -> str:
     return f"ORD-{utcnow().astimezone():%Y%m%d}-{seq:06d}"
 
 
-async def create_order(db: AsyncDatabase, username: str, cart: list, guest_id: str | None = None) -> dict:
+async def create_order(
+    db: AsyncDatabase, username: str, cart: list, guest_id: str | None = None,
+    walk_in: bool = False, placed_by: str | None = None,
+) -> dict:
+    """walk_in: a customer without an account, named by the admin (shown like a guest order)."""
     merged: dict[str, Decimal] = {}
     for line in cart:
         merged[line.item_id] = merged.get(line.item_id, Decimal(0)) + line.quantity
@@ -154,8 +158,9 @@ async def create_order(db: AsyncDatabase, username: str, cart: list, guest_id: s
     doc = {
         "order_id": await generate_order_id(db),
         "username": username,
-        "is_guest": guest_id is not None,
+        "is_guest": guest_id is not None or walk_in,
         **({"guest_id": guest_id} if guest_id else {}),
+        **({"placed_by": placed_by} if placed_by else {}),
         **price_order(items, tax_config),
         "tax_config": tax_config,
         "status": "new",

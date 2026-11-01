@@ -51,7 +51,7 @@ async def main(reset: bool) -> None:
     client = create_client(cfg.mongo_uri)
     db = client[cfg.mongo_db]
     if reset:
-        for name in ("products", "orders", "users", "settings", "counters"):
+        for name in ("products", "orders", "users", "settings", "counters", "refresh_tokens"):
             await db.drop_collection(name)
         print(f"Reset database '{cfg.mongo_db}'")
     await ensure_indexes(db)
@@ -61,7 +61,9 @@ async def main(reset: bool) -> None:
             {"username": username},
             {"$setOnInsert": {
                 "username": username, "password_hash": hash_password(password), "role": role,
-                "full_name": full_name, "created_at": utcnow(),
+                "full_name": full_name, "created_at": utcnow(), "token_version": 0,
+                # Published sample passwords: the first sign-in must choose a new one.
+                "must_change_password": True,
             }},
             upsert=True,
         )

@@ -4,10 +4,12 @@ import Layout from './components/Layout';
 import RequireAuth from './components/RequireAuth';
 import { useAuth } from './context/AuthContext';
 import GuestStart from './pages/GuestStart';
+import AccountSecurity from './pages/AccountSecurity';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/admin/Dashboard';
 import GuestQr from './pages/admin/GuestQr';
+import NewOrder from './pages/admin/NewOrder';
 import OrderDetail from './pages/admin/OrderDetail';
 import Orders from './pages/admin/Orders';
 import PrintBill from './pages/admin/PrintBill';
@@ -55,10 +57,15 @@ export default function App() {
       <Route element={<RequireAuth roles={['admin']}><Layout /></RequireAuth>}>
         <Route path="/admin" element={<Dashboard />} />
         <Route path="/admin/orders" element={<Orders />} />
+        <Route path="/admin/orders/new" element={<NewOrder />} />
         <Route path="/admin/orders/:orderId" element={<OrderDetail />} />
         <Route path="/admin/products" element={<Products />} />
         <Route path="/admin/settings" element={<ShopSettingsPage />} />
         <Route path="/admin/guest-qr" element={<GuestQr />} />
+      </Route>
+      {/* Password, two-factor sign-in and devices, for any signed-in account */}
+      <Route element={<RequireAuth roles={['admin', 'user']}><Layout /></RequireAuth>}>
+        <Route path="/account/security" element={<AccountSecurity />} />
       </Route>
       {/* Print view has no app chrome */}
       <Route path="/admin/orders/:orderId/print" element={<RequireAuth roles={['admin']}><PrintBill /></RequireAuth>} />

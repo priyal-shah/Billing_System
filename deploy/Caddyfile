@@ -19,6 +19,12 @@
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		# Only this site's own scripts may run, so injected <script> tags or inline handlers are blocked.
+		# Styles allow 'unsafe-inline' because Material UI injects its styles at runtime; Google Fonts
+		# serves the Inter font. blob:/data: images are the AI assistant's photo previews and the QR code.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+		# The microphone is used by the AI assistant's voice input; nothing else is needed.
+		Permissions-Policy "microphone=(self), camera=(), geolocation=(), payment=(), usb=()"
 		-Server
 	}
 
